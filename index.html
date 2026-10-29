@@ -6,6 +6,17 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
 <title>Simply Live Setlist</title>
+<meta name="description" content="Simply Live's setlists, with a reference link for every song.">
+<!-- Link preview when the page is shared (WhatsApp, Telegram, iMessage…) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Simply Live Setlist">
+<meta property="og:title" content="Simply Live Setlist">
+<meta property="og:description" content="Simply Live's setlists, with a reference link for every song.">
+<meta property="og:url" content="https://davytan07.github.io/simplylivesetlist/">
+<meta property="og:image" content="https://davytan07.github.io/simplylivesetlist/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   :root {
     --bg: #f7f6f3; --card: #ffffff; --ink: #1c1b19; --muted: #6f6c66; --line: #e6e3dc;
@@ -167,9 +178,12 @@
     <p>Each set fits on one screen. Scroll down and it snaps to the next set. Links are hidden and your screen stays on. Your phone remembers which view you used last.</p>
     <p>Tip: add this page to your Home Screen (Share → Add to Home Screen). It then opens full-screen, which leaves room for bigger text.</p>
 
+    <h3>When the setlist changes</h3>
+    <p>The page reads the setlist doc every time you open it, refresh it or come back to it. Fetching the latest version takes about 10 seconds; until then you see the last copy saved on your phone. "Updated" at the bottom of the full view shows when it last checked.</p>
+
     <h3>Missing or broken links</h3>
     <p>Everything comes live from the <a id="docLink" target="_blank" rel="noopener">setlist doc</a> and Simply Live's Repertoire Master Sheet. Links can't be changed on this page.</p>
-    <p>All missing or broken links have to be added or fixed in that Google Sheet, in the LINKS column of the "SIMPLY LIVE Repertoire" tab. The change shows up here the next time the page is opened or refreshed.</p>
+    <p>All missing or broken links have to be added or fixed in that Google Sheet, in the LINKS column of the "SIMPLY LIVE Repertoire" tab. The change shows up here the next time the page updates.</p>
   </div>
 </dialog>
 <main id="app"><div class="empty">Loading the setlist…<br>The first visit takes a few seconds.</div></main>
@@ -613,7 +627,10 @@ if (typeof document !== 'undefined') {
     footer.append(a);
   }
 
+  let refreshing = false;
   async function refresh() {
+    if (refreshing) return;
+    refreshing = true;
     status('Updating…');
     try {
       const get = async url => { const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return r.text(); };
@@ -630,6 +647,8 @@ if (typeof document !== 'undefined') {
       if (dates.length) return status(`Offline: showing copy from ${fmtTime.format(loadedAt)}`, true);
       $('app').replaceChildren(el('div', 'empty', "Couldn't load the setlist. Check your connection, and that both Google files are shared as \"Anyone with the link\"."));
       status('Not loaded', true);
+    } finally {
+      refreshing = false;
     }
   }
 
@@ -646,7 +665,13 @@ if (typeof document !== 'undefined') {
   $('guide').addEventListener('click', e => { if (e.target === $('guide')) $('guide').close(); }); // tap outside to close
   $('docLink').href = `${SOURCES.doc}/edit`;
   addEventListener('resize', () => { if (`${innerWidth}x${probe.offsetHeight}` !== fitted) fit(); }); // rotation, not toolbars
-  document.addEventListener('visibilitychange', () => compact && keepAwake(true));
+  // Coming back to the page (unlocking the phone, switching back from another app or tab)
+  // fetches the latest setlist, unless it was updated in the last minute.
+  const refreshIfStale = () => {
+    if (document.visibilityState === 'visible' && Date.now() - loadedAt > 60e3) refresh();
+  };
+  document.addEventListener('visibilitychange', () => { refreshIfStale(); if (compact) keepAwake(true); });
+  addEventListener('pageshow', e => { if (e.persisted) refreshIfStale(); }); // restored from the back/forward cache
   addEventListener('pointerdown', () => compact && keepAwake(true));
   try { setView(localStorage.getItem(VIEW) === 'compact'); } catch { setView(false); }
 
