@@ -55,11 +55,12 @@
   li + li { border-top: 1px solid var(--line); }
 
   .song { display: grid; grid-template-columns: 28px 1fr auto; gap: 2px 10px; padding: 12px 14px; }
-  .no { grid-row: span 4; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+  .no { color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
   .tag { grid-column: 2 / 4; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
-  .title { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-  .key { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .title { grid-column: 2; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+  .key { grid-column: 3; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .meta { grid-column: 2 / 4; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+  .remark { grid-column: 2 / 4; color: var(--muted); font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
   .links { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .chip {
     display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px;
@@ -109,13 +110,13 @@ const MATCH_THRESHOLD = 0.8;
 const RE = {
   date: /^(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])\s*(.*)$/,                // 29/10「THUR」🎃
   set: /^\*?\s*(\d+(?:st|nd|rd|th)\s+set)\b\s*(.*)$/i,                  // *1st set 8:30-9:30pm Izzy
-  song: /^(\d{1,2})(?:\s*[.)]\s*|\s+)(\S.*)$/,                           // 7. **Tian Hou 天后 (En Ver. / Ab Key) : Zijie
+  song: /^(\d{1,2}(?:\.\d+)?)(?:\s*[.)]\s*|\s+)(\S.*)$/,                 // 7. **Tian Hou 天后 (En Ver. / Ab Key) : Zijie  (also "10.5.")
   extra: /^\**\s*(stand\s*by\s*\d*|stand|encore)\s*[:：]\s*(.*)$/i,       // **STAND BY 1 : **Stronger (Ori/Am) : Benita
   week: /^<.*>\s*set\s*list/i,                                           // < 23 OCT 2026 - 25 OCT 2026 > Set List
 };
 
 function parseDoc(text, today = new Date()) {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/).map(l => l.trim().replace(/（/g, '(').replace(/）/g, ')'));
+  const lines = text.split(/\r?\n/).map(l => l.replace(/[\u200b-\u200f\u2060\ufeff]/g, '').trim().replace(/（/g, '(').replace(/）/g, ')'));
   const structural = l => [RE.date, RE.set, RE.song, RE.extra].some(re => re.test(l));
   const dates = [];
   let day, set;
@@ -140,8 +141,12 @@ function parseDoc(text, today = new Date()) {
     } else if ((m = line.match(RE.set))) {
       day.sets.push(set = { name: m[1], meta: m[2].trim(), items: [] });
     } else if ((m = line.match(RE.extra))) {
-      const entry = parseEntry(m[2]);
-      if (entry.title && entry.title !== '-') push({ type: 'song', label: m[1].replace(/\s+/g, ' '), ...entry });
+      const body = m[2].replace(/\*/g, '').trim();
+      if (/^(-+|nil|none|no|mei you|tbc|tba)\b|^-*$/i.test(body)) {
+        if (/\w/.test(body)) push({ type: 'note', text: line.replace(/\*/g, '') }); // "STAND BY: mei you, end early"
+      } else {
+        push({ type: 'song', label: m[1].replace(/\s+/g, ' '), ...parseEntry(body) });
+      }
     } else if ((m = line.match(RE.song))) {
       push({ type: 'song', no: +m[1], ...parseEntry(m[2]) });
     } else if (/^-+$/.test(line)) {
@@ -150,24 +155,82 @@ function parseDoc(text, today = new Date()) {
       push({ type: 'note', text: line.replace(/^\*+\s*/, '') });
     }
   }
+  const songs = dates.flatMap(d => d.sets.flatMap(s => s.items.filter(i => i.type === 'song')));
+  const singers = learnSingers(songs.map(s => s.who));
+  for (const song of songs) Object.assign(song, splitWho(song.who, singers));
   return dates.sort((a, b) => a.date - b.date);
 }
 
+// The band's singers, learnt from the doc itself: capitalised names that keep turning up right
+// after a song's colon or after "&", "+", "," or "/" (Zerlene, Izzy, ZJ, RB…).
+function learnSingers(whos) {
+  const count = new Map();
+  for (const who of whos) {
+    for (const [, name] of who.matchAll(/(?:^|[&+,/]|\band\b)\s*([A-Z][A-Za-z]*)/g)) {
+      count.set(name.toLowerCase(), (count.get(name.toLowerCase()) || 0) + 1);
+    }
+  }
+  const names = [...count].filter(([, n]) => n >= 2);
+  // Drop glued typos like "Izzypress": a more common name plus extra letters.
+  return new Set(names.filter(([k, n]) => !names.some(([p, m]) => p !== k && p.length >= 3 && k.startsWith(p) && m > n)).map(([k]) => k));
+}
+
+// "Benita help intro this song…" -> { who: "Benita", remark: "help intro this song…" }
+// Leading names are singers; the remark starts at the first word that isn't one.
+function splitWho(text, singers) {
+  if (!/^[A-Z]/.test(text)) return { who: text, remark: '' }; // "all except ZJ"
+  let who = '', rest = text;
+  for (let m; (m = rest.match(/^(\s*(?:[&+,/.]|\band\b)?\s*)([A-Za-z]+)/));) {
+    const [whole, sep, word] = m, lower = word.toLowerCase();
+    // "Izzypress fast pls ty" -> "Izzy" + "press fast pls ty"
+    const glued = !singers.has(lower) && [...singers].filter(s => s.length >= 3 && lower.startsWith(s)).sort((a, b) => b.length - a.length)[0];
+    if (glued) {
+      who += sep + word.slice(0, glued.length);
+      rest = word.slice(glued.length) + rest.slice(whole.length);
+      break;
+    }
+    const joined = /[&+,/]|and/.test(sep);
+    if (!(singers.has(lower) || !who || (joined && /^[A-Z]/.test(word)))) break;
+    who += sep + word;
+    rest = rest.slice(whole.length);
+  }
+  return { who: who.trim(), remark: rest.replace(/^[\s.,:;~-]+/, '').trim() };
+}
+
 // "**Shi Luo Sha Zhou 失落沙洲 (Ori/G) : Benita" -> { title, version, key, who }
+// The (version/key) bracket is the one right before the singer's colon. Brackets before it
+// are jokes or asides that stay in the title ("Ji Mo (Drink More) Jiu Hao"); brackets after
+// the singers are notes ("BIGBANG MEDLEY : Ben, Zer, Can (Need Males BV please)").
 function parseEntry(body) {
   body = body.replace(/\*/g, '').trim();
-  let title = body, info = '', who = '';
-  const open = body.indexOf('(');
-  if (open > 0) {
-    const close = body.indexOf(')', open);
-    title = body.slice(0, open);
-    info = body.slice(open + 1, close < 0 ? undefined : close);
-    who = close < 0 ? '' : body.slice(close + 1);
-  } else {
-    const colon = body.search(/[:：]/);
-    if (colon > 0) [title, who] = [body.slice(0, colon), body.slice(colon + 1)];
+  const { groups, colons } = scan(body);
+  const after = g => body.slice(g.end);
+  let info = groups.findLast(g => /^\s*[:：]/.test(after(g)));
+  let titleEnd, whoStart;
+  if (info) [titleEnd, whoStart] = [info.start, info.end];
+  else if (colons.length) titleEnd = whoStart = colons[0];
+  else {
+    info = groups.findLast(g => !after(g).trim());
+    [titleEnd, whoStart] = [info ? info.start : body.length, body.length];
   }
-  return { title: title.trim(), ...splitInfo(info), who: who.replace(/^\s*[:：]\s*/, '').trim() };
+  return {
+    title: body.slice(0, titleEnd).trim(),
+    ...splitInfo(info ? info.inner : ''),
+    who: body.slice(whoStart).replace(/^\s*[:：]\s*/, '').trim(),
+  };
+}
+
+// Top-level brackets and the colons outside them. Handles "(Ori(no rap)/C#m)" and a bracket left open.
+function scan(s) {
+  const groups = [], colons = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '(' && depth++ === 0) start = i;
+    else if (s[i] === ')' && depth && --depth === 0) groups.push({ start, end: i + 1, inner: s.slice(start + 1, i) });
+    else if (!depth && (s[i] === ':' || s[i] === '：')) colons.push(i);
+  }
+  if (depth) groups.push({ start, end: s.length, inner: s.slice(start + 1) });
+  return { groups, colons };
 }
 
 // "Concert Ver / F# Key" -> { version: "Concert Ver", key: "F#" }
@@ -245,10 +308,13 @@ function similarity(a, b) {
   return row[b.length] / Math.max(a.length, b.length);
 }
 
-// Each title is compared as written and without a trailing "- Artist", "/ Alias" or "(…)".
+// Each title is compared as written and also without asides: a trailing "- Artist" or "/ Alias",
+// jokes in brackets or quotes ("Ji Mo (Drink More) Jiu Hao"), and a leading "The".
+// "x3" shorthand is spelled out either way ("想見你 x3", "Pianx3 Ai").
 function titleForms(title) {
-  const short = title.replace(/\s+[-–/]\s+.*$/, '').replace(/\(.*?\)/g, '').trim();
-  return [...new Set([title, short])].filter(Boolean).map(t => ({ han: han(t), latin: latin(t) }));
+  const short = title.replace(/\s+[-–/]\s+.*$/, '').replace(/\([^)]*\)|\[[^\]]*\]|["“][^"”]*["”]/g, '').replace(/^the\s+/i, '').trim();
+  const spelled = t => t.replace(/(\p{Script=Han}+|[a-z]+)\s?[x×]([2-9])\b/giu, (_, w, n) => w.repeat(+n));
+  return [...new Set([title, short].flatMap(t => [t, spelled(t)]))].filter(Boolean).map(t => ({ han: han(t), latin: latin(t) }));
 }
 
 // Chinese characters are the strongest signal; pinyin alone can't tell 愛 from 曖.
@@ -329,6 +395,7 @@ if (typeof document !== 'undefined') {
       el('span', 'key', item.key),
       el('span', 'meta', [item.version, item.who].filter(Boolean).join(' · ')),
     );
+    if (item.remark) li.append(el('span', 'remark', item.remark));
     const box = el('div', 'links');
     for (const url of links) {
       const { kind, label } = describeLink(url);
