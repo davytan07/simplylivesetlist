@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+<title>Setlist</title>
+<style>
+  :root {
+    --bg: #f7f6f3; --card: #ffffff; --ink: #1c1b19; --muted: #6f6c66; --line: #e6e3dc;
+    --accent: #c2410c; --missing-bg: #fff4d6; --missing-ink: #8a5a00;
+    --spotify: #1db954; --youtube: #e62117; --dropbox: #0061fe; --other: #7c7a74;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121212; --card: #1c1c1c; --ink: #f1efea; --muted: #9b978f; --line: #2c2b29;
+      --accent: #fb923c; --missing-bg: #3a2e12; --missing-ink: #f5c95c; --other: #a8a49c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  button { font: inherit; color: inherit; }
+
+  .bar {
+    position: sticky; top: 0; z-index: 1;
+    display: grid; grid-template-columns: 48px 1fr 48px; align-items: center;
+    padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .bar button {
+    height: 44px; border: 0; background: none; font-size: 28px; line-height: 1; border-radius: 12px; cursor: pointer;
+  }
+  .bar button:disabled { opacity: .25; }
+  .picker { position: relative; text-align: center; }
+  .picker select { position: absolute; inset: 0; opacity: 0; width: 100%; font-size: 16px; cursor: pointer; }
+  #dateLabel { display: block; font-weight: 700; font-size: 18px; }
+  #dateSub { display: block; font-size: 13px; color: var(--muted); }
+  .tonight { color: var(--accent); }
+
+  main { max-width: 640px; margin: 0 auto; padding: 8px 16px 24px; }
+  .set h2 {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    margin: 20px 4px 8px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  }
+  .set h2 span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  ol { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  li + li { border-top: 1px solid var(--line); }
+
+  .song { display: grid; grid-template-columns: 28px 1fr auto; gap: 2px 10px; padding: 12px 14px; }
+  .no { grid-row: span 4; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+  .tag { grid-column: 2 / 4; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+  .title { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+  .key { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .meta { grid-column: 2 / 4; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+  .links { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px;
+    border: 1px solid var(--line); border-radius: 999px; color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 500;
+  }
+  .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--other)); }
+  .chip:active { background: var(--line); }
+  .chip.spotify { --c: var(--spotify); } .chip.youtube { --c: var(--youtube); } .chip.dropbox { --c: var(--dropbox); }
+  .ref { align-self: center; font-size: 13px; color: var(--muted); }
+
+  .song.missing { background: var(--missing-bg); box-shadow: inset 4px 0 0 var(--missing-ink); }
+
+  .break { height: 6px; background: var(--bg); }
+  .note { padding: 8px 14px 8px 52px; font-size: 14px; color: var(--muted); font-style: italic; }
+
+  .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
+  .empty button { margin-top: 12px; padding: 10px 18px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
+  footer { max-width: 640px; margin: 0 auto; padding: 0 20px 24px; color: var(--muted); font-size: 13px; text-align: center; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <button id="prev" aria-label="Previous date" disabled>‹</button>
+  <label class="picker">
+    <span id="dateLabel">Setlist</span>
+    <span id="dateSub">Loading…</span>
+    <select id="dates" aria-label="Choose a date"></select>
+  </label>
+  <button id="next" aria-label="Next date" disabled>›</button>
+</header>
+<main id="app"><div class="empty">Loading the setlist…<br>The first visit takes a few seconds.</div></main>
+<footer id="status"></footer>
+
+<script src="t2s.js"></script>
+<script>
+// The two Google files this page reads. Both must be shared as "Anyone with the link can view".
+const SOURCES = {
+  doc: 'https://docs.google.com/document/d/11fZCWRjIeQ12KSugUx5lXLvCpGZmROM28RYsjdLhg6E',
+  sheet: 'https://docs.google.com/spreadsheets/d/11Jeu6fbiISh2wYhWGZhCJPME15Cxyn0DEskmMchH4NU',
+  sheetTab: '1352107563', // "SIMPLY LIVE Repertoire"
+};
+const MATCH_THRESHOLD = 0.8;
+
+// ---------- Setlist doc ----------
+
+const RE = {
+  date: /^(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])\s*(.*)$/,                // 29/10「THUR」🎃
+  set: /^\*?\s*(\d+(?:st|nd|rd|th)\s+set)\b\s*(.*)$/i,                  // *1st set 8:30-9:30pm Izzy
+  song: /^(\d{1,2})(?:\s*[.)]\s*|\s+)(\S.*)$/,                           // 7. **Tian Hou 天后 (En Ver. / Ab Key) : Zijie
+  extra: /^\**\s*(stand\s*by\s*\d*|stand|encore)\s*[:：]\s*(.*)$/i,       // **STAND BY 1 : **Stronger (Ori/Am) : Benita
+  week: /^<.*>\s*set\s*list/i,                                           // < 23 OCT 2026 - 25 OCT 2026 > Set List
+};
+
+function parseDoc(text, today = new Date()) {
+  const lines = text.replace(/^﻿/, '').split(/\r?\n/).map(l => l.trim().replace(/（/g, '(').replace(/）/g, ')'));
+  const structural = l => [RE.date, RE.set, RE.song, RE.extra].some(re => re.test(l));
+  const dates = [];
+  let day, set;
+  const push = item => {
+    if (!day) return;
+    if (!set) day.sets.push(set = { name: '', meta: '', items: [] });
+    set.items.push(item);
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i], m;
+    if (!line || RE.week.test(line)) continue;
+    // A song line that wraps mid-bracket continues on the next line.
+    const next = lines[i + 1] || '';
+    if (RE.song.test(line) && count(line, '(') > count(line, ')') && next.includes(')') && !structural(next)) line += ' ' + lines[++i];
+
+    if ((m = line.match(RE.date))) {
+      dates.push(day = { date: inferYear(+m[1], +m[2], today), tag: m[3].replace(/「.*?」/, '').trim(), sets: [] });
+      set = null;
+    } else if (!day) {
+      continue;
+    } else if ((m = line.match(RE.set))) {
+      day.sets.push(set = { name: m[1], meta: m[2].trim(), items: [] });
+    } else if ((m = line.match(RE.extra))) {
+      const entry = parseEntry(m[2]);
+      if (entry.title && entry.title !== '-') push({ type: 'song', label: m[1].replace(/\s+/g, ' '), ...entry });
+    } else if ((m = line.match(RE.song))) {
+      push({ type: 'song', no: +m[1], ...parseEntry(m[2]) });
+    } else if (/^-+$/.test(line)) {
+      push({ type: 'break' });
+    } else {
+      push({ type: 'note', text: line.replace(/^\*+\s*/, '') });
+    }
+  }
+  return dates.sort((a, b) => a.date - b.date);
+}
+
+// "**Shi Luo Sha Zhou 失落沙洲 (Ori/G) : Benita" -> { title, version, key, who }
+function parseEntry(body) {
+  body = body.replace(/\*/g, '').trim();
+  let title = body, info = '', who = '';
+  const open = body.indexOf('(');
+  if (open > 0) {
+    const close = body.indexOf(')', open);
+    title = body.slice(0, open);
+    info = body.slice(open + 1, close < 0 ? undefined : close);
+    who = close < 0 ? '' : body.slice(close + 1);
+  } else {
+    const colon = body.search(/[:：]/);
+    if (colon > 0) [title, who] = [body.slice(0, colon), body.slice(colon + 1)];
+  }
+  return { title: title.trim(), ...splitInfo(info), who: who.replace(/^\s*[:：]\s*/, '').trim() };
+}
+
+// "Concert Ver / F# Key" -> { version: "Concert Ver", key: "F#" }
+function splitInfo(info) {
+  const slash = info.lastIndexOf('/');
+  const tail = (slash >= 0 ? info.slice(slash + 1) : (info.match(/\bkey\b(.*)/i) || [])[1] || '')
+    .replace(/\bkey\b/ig, '').trim();
+  if (/^[A-G][#b♭♯]?m?\b/.test(tail) && tail.length <= 12) {
+    return { version: (slash >= 0 ? info.slice(0, slash) : info.replace(/\bkey\b.*/i, '')).trim(), key: tail };
+  }
+  return { version: info.trim(), key: '' };
+}
+
+// The doc has no years: pick the one that puts the date closest to today.
+function inferYear(d, m, today) {
+  const y = today.getFullYear();
+  return [y - 1, y, y + 1].map(yr => new Date(yr, m - 1, d))
+    .sort((a, b) => Math.abs(a - today) - Math.abs(b - today))[0];
+}
+
+const count = (s, ch) => s.split(ch).length - 1;
+
+// ---------- Repertoire sheet ----------
+
+// The sheet's HTML view is used instead of CSV because it keeps the URL behind linked text and smart chips.
+function sheetCells(html) {
+  const page = new DOMParser().parseFromString(html, 'text/html');
+  return [...page.querySelectorAll('table tr')].map(tr => [...tr.querySelectorAll('td')].map(td => ({
+    text: td.textContent.trim(),
+    links: [...td.querySelectorAll('a[href]')].map(a => unwrapGoogleUrl(a.getAttribute('href')))
+      .concat(td.textContent.match(/https?:\/\/[^\s,]+/g) || []),
+  })));
+}
+
+function unwrapGoogleUrl(href) {
+  try {
+    const url = new URL(href);
+    return url.hostname === 'www.google.com' && url.pathname === '/url' ? url.searchParams.get('q') : href;
+  } catch { return ''; }
+}
+
+function buildLibrary(rows) {
+  const h = rows.findIndex(r => r.some(c => /^song title$/i.test(c.text)));
+  if (h < 0) throw new Error('Could not find the "SONG TITLE" header in the sheet');
+  const head = rows[h].map(c => c.text.toLowerCase());
+  const col = name => head.findIndex(t => t.startsWith(name));
+  const C = { title: col('song title'), version: col('singer'), key: col('key'), ref: col('key ref'), remark: col('remark'), links: col('links') };
+  const get = (r, i) => (i >= 0 && r[i] ? r[i].text : '');
+  return rows.slice(h + 1).filter(r => get(r, C.title)).map(r => ({
+    title: get(r, C.title).replace(/\*/g, '').trim(),
+    version: get(r, C.version), key: get(r, C.key), ref: get(r, C.ref), remark: get(r, C.remark),
+    links: [...new Set(r.slice(C.links).flatMap(c => c.links))].filter(u => /^https?:\/\//.test(u)),
+  }));
+}
+
+// ---------- Matching ----------
+
+const han = s => Array.from(s.match(/\p{Script=Han}/gu) || [], c => T2S.get(c) || c); // compared in Simplified
+const latin = s => Array.from(s.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]/g, ''));
+const normKey = k => k.replace(/♭/g, 'b').replace(/♯/g, '#').replace(/\s+/g, '').toLowerCase().split(/[-–>]/)[0];
+
+// LCS / longer length: order-aware, tolerant of small spelling differences, but an
+// extra word still counts against it (我難過 is not 我不难过, Love Me is not Love More).
+function similarity(a, b) {
+  if (!a.length || !b.length) return 0;
+  const row = new Array(b.length + 1).fill(0);
+  for (const ca of a) {
+    let diag = 0;
+    for (let j = 1; j <= b.length; j++) {
+      const up = row[j];
+      row[j] = ca === b[j - 1] ? diag + 1 : Math.max(row[j], row[j - 1]);
+      diag = up;
+    }
+  }
+  return row[b.length] / Math.max(a.length, b.length);
+}
+
+// Each title is compared as written and without a trailing "- Artist", "/ Alias" or "(…)".
+function titleForms(title) {
+  const short = title.replace(/\s+[-–/]\s+.*$/, '').replace(/\(.*?\)/g, '').trim();
+  return [...new Set([title, short])].filter(Boolean).map(t => ({ han: han(t), latin: latin(t) }));
+}
+
+// Chinese characters are the strongest signal; pinyin alone can't tell 愛 from 曖.
+function formScore(q, r) {
+  const lat = similarity(q.latin, r.latin);
+  if (!q.han.length || !r.han.length) return lat;
+  const h = similarity(q.han, r.han);
+  return Math.max(h, (h + lat) / 2);
+}
+
+const titleScore = (qs, rs) => Math.max(...qs.flatMap(q => rs.map(r => formScore(q, r))));
+
+function indexLibrary(library) {
+  for (const row of library) {
+    row.forms = titleForms(row.title);
+    row.ver = latin(`${row.version} ${row.remark}`.replace(/\bver(sion|s)?\b\.?/ig, ''));
+  }
+  return library;
+}
+
+function findRow(title, entry, library) {
+  const q = titleForms(title);
+  const scored = library.map(row => ({ row, score: titleScore(q, row.forms) })).sort((a, b) => b.score - a.score);
+  const best = scored[0];
+  if (!best || best.score < MATCH_THRESHOLD) return null;
+  // The same song can be listed in several versions/keys: prefer the one the setlist asks for.
+  const ver = latin(entry.version.replace(/\bver(sion|s)?\b\.?/ig, ''));
+  const key = normKey(entry.key);
+  const fit = ({ row, score }) => score
+    + 0.5 * similarity(ver, row.ver)
+    + (key && normKey(row.key) === key ? 0.3 : 0)
+    + (row.links.length ? 0.2 : 0);
+  return scored.filter(s => s.score >= best.score - 0.05).sort((a, b) => fit(b) - fit(a))[0].row;
+}
+
+// Medleys like "Yu Zai 魚仔 + Ji Fen Zhi Ji 幾分之幾" are looked up whole first, then part by part.
+function lookup(entry, library) {
+  const whole = findRow(entry.title, entry, library);
+  if (whole || !entry.title.includes('+')) return whole ? [whole] : [];
+  return entry.title.split('+').map(part => findRow(part.trim(), entry, library)).filter(Boolean);
+}
+
+function describeLink(url) {
+  const u = new URL(url);
+  const host = u.hostname.replace(/^www\.|^m\./, '');
+  if (/spotify/.test(host)) return { kind: 'spotify', label: 'Spotify' };
+  if (/youtu\.?be/.test(host)) return { kind: 'youtube', label: 'YouTube' };
+  if (/dropbox/.test(host)) {
+    const ext = (u.pathname.match(/\.(\w+)$/) || [])[1]?.toLowerCase();
+    const label = /^\/(scl\/fo|sh)\//.test(u.pathname) ? 'Folder'
+      : ext === 'pdf' ? 'Score' : /^(mp3|wav|m4a|aac|flac)$/.test(ext) ? 'Audio'
+      : /^(musicxml|mxl|xml|mscz)$/.test(ext) ? 'MusicXML' : 'Dropbox';
+    return { kind: 'dropbox', label };
+  }
+  return { kind: 'other', label: host };
+}
+
+// ---------- Page ----------
+
+if (typeof document !== 'undefined') {
+  const $ = id => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const fmtDay = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const fmtTime = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const CACHE = 'setlist-cache-v1';
+
+  let dates = [], library = [], current = -1, loadedAt = 0;
+
+  function renderSong(item) {
+    const rows = lookup(item, library);
+    const links = [...new Set(rows.flatMap(r => r.links))];
+    const li = el('li', 'song' + (links.length ? '' : ' missing'));
+    li.append(el('span', 'no', item.no));
+    if (item.label) li.append(el('span', 'tag', item.label));
+    li.append(
+      el('span', 'title', item.title),
+      el('span', 'key', item.key),
+      el('span', 'meta', [item.version, item.who].filter(Boolean).join(' · ')),
+    );
+    const box = el('div', 'links');
+    for (const url of links) {
+      const { kind, label } = describeLink(url);
+      const a = el('a', `chip ${kind}`, label);
+      a.href = url; a.target = '_blank'; a.rel = 'noopener';
+      box.append(a);
+    }
+    // Only worth showing when the reference recording is in a different key ("Ori -2").
+    const refs = [...new Set(rows.map(r => r.ref).filter(ref => /\d/.test(ref)))];
+    if (refs.length) box.append(el('span', 'ref', `ref: ${refs.join(', ')}`));
+    if (links.length) li.append(box);
+    else li.title = rows.length ? 'In the sheet, but no link yet' : 'Not in the sheet';
+    return { li, linked: links.length > 0 };
+  }
+
+  function render() {
+    const app = $('app');
+    app.replaceChildren();
+    const day = dates[current];
+    $('prev').disabled = current <= 0;
+    $('next').disabled = current >= dates.length - 1;
+    if (!day) return;
+
+    const isToday = iso(day.date) === iso(new Date());
+    $('dateLabel').textContent = [fmtDay.format(day.date), day.tag].filter(Boolean).join(' ');
+    $('dateLabel').classList.toggle('tonight', isToday);
+    $('dates').value = String(current);
+
+    let total = 0, linked = 0;
+    for (const set of day.sets) {
+      const section = el('section', 'set');
+      const h2 = el('h2', null, set.name || 'Setlist');
+      if (set.meta) h2.append(el('span', null, set.meta));
+      const ol = el('ol');
+      for (const item of set.items) {
+        if (item.type === 'song') {
+          const { li, linked: ok } = renderSong(item);
+          ol.append(li); total++; linked += ok;
+        } else {
+          ol.append(item.type === 'break' ? el('li', 'break') : el('li', 'note', item.text));
+        }
+      }
+      section.append(h2, ol);
+      app.append(section);
+    }
+    $('dateSub').textContent = `${isToday ? 'Tonight · ' : ''}${linked}/${total} songs linked`;
+    history.replaceState(null, '', '#' + iso(day.date));
+  }
+
+  function show(index) {
+    current = Math.max(0, Math.min(index, dates.length - 1));
+    render();
+    scrollTo(0, 0);
+  }
+
+  function load(data) {
+    const prev = dates[current] && iso(dates[current].date);
+    dates = parseDoc(data.doc);
+    library = indexLibrary(data.library);
+    loadedAt = data.at;
+    $('dates').replaceChildren(...dates.map((d, i) => {
+      const o = el('option', null, fmtDay.format(d.date) + (d.tag ? ' ' + d.tag : ''));
+      o.value = String(i);
+      return o;
+    }));
+    const wanted = prev || location.hash.slice(1);
+    const today = iso(new Date());
+    let i = dates.findIndex(d => iso(d.date) === wanted);
+    if (i < 0) i = dates.findIndex(d => iso(d.date) >= today); // next gig
+    if (i < 0) i = dates.length - 1;
+    current = i;
+    render();
+  }
+
+  function status(text, retry) {
+    const footer = $('status');
+    footer.replaceChildren(text + ' · ');
+    const a = el('a', null, retry ? 'Retry' : 'Sources');
+    if (retry) { a.href = '#'; a.onclick = e => { e.preventDefault(); refresh(); }; }
+    else { a.href = SOURCES.doc; a.target = '_blank'; }
+    footer.append(a);
+  }
+
+  async function refresh() {
+    status('Updating…');
+    try {
+      const get = async url => { const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return r.text(); };
+      const [doc, html] = await Promise.all([
+        get(`${SOURCES.doc}/export?format=txt`),
+        get(`${SOURCES.sheet}/htmlview/sheet?headers=false&gid=${SOURCES.sheetTab}`),
+      ]);
+      const data = { doc, library: buildLibrary(sheetCells(html)).map(({ title, version, key, ref, remark, links }) => ({ title, version, key, ref, remark, links })), at: Date.now() };
+      try { localStorage.setItem(CACHE, JSON.stringify(data)); } catch {}
+      load(data);
+      status(`Updated ${fmtTime.format(data.at)}`);
+    } catch (err) {
+      console.error(err);
+      if (dates.length) return status(`Offline: showing copy from ${fmtTime.format(loadedAt)}`, true);
+      $('app').replaceChildren(el('div', 'empty', "Couldn't load the setlist. Check your connection, and that both Google files are shared as \"Anyone with the link\"."));
+      status('Not loaded', true);
+    }
+  }
+
+  $('prev').onclick = () => show(current - 1);
+  $('next').onclick = () => show(current + 1);
+  $('dates').onchange = e => show(+e.target.value);
+  addEventListener('hashchange', () => {
+    const i = dates.findIndex(d => '#' + iso(d.date) === location.hash);
+    if (i >= 0 && i !== current) show(i);
+  });
+
+  // Show the last saved copy instantly (venues often have bad signal), then fetch the latest.
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(CACHE)); } catch {}
+  if (cached) load(cached);
+  refresh();
+}
+</script>
+</body>
+</html>
