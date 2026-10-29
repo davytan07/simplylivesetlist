@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
-<title>Setlist</title>
+<title>Simply Live Setlist</title>
 <style>
   :root {
     --bg: #f7f6f3; --card: #ffffff; --ink: #1c1b19; --muted: #6f6c66; --line: #e6e3dc;
@@ -29,8 +29,8 @@
 
   .bar {
     position: sticky; top: 0; z-index: 1;
-    display: grid; grid-template-columns: 44px 1fr 44px 44px; align-items: center;
-    padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+    display: grid; grid-template-columns: 38px 36px minmax(0, 1fr) 36px 38px; align-items: center; /* empty | ‹ | date | › | ? */
+    padding: calc(8px + env(safe-area-inset-top)) 6px 8px;
     background: color-mix(in srgb, var(--bg) 88%, transparent);
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
@@ -39,13 +39,23 @@
     height: 44px; border: 0; background: none; font-size: 28px; line-height: 1; border-radius: 12px; cursor: pointer;
   }
   .bar button:disabled { opacity: .25; }
-  .view svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; vertical-align: middle; }
-  .view .to-full, .compact .view .to-compact { display: none; }
-  .compact .view .to-full { display: inline; }
+  .views {
+    position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 2;
+    display: flex; padding: 3px; border: 1px solid var(--line); border-radius: 999px;
+    background: color-mix(in srgb, var(--card) 94%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 16px rgb(0 0 0 / .18);
+  }
+  .views button { height: 36px; padding: 0 18px; border: 0; border-radius: 999px; background: none; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; }
+  .views button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  #help span {
+    display: inline-grid; place-items: center; width: 24px; height: 24px;
+    border: 1.5px solid currentColor; border-radius: 50%; font-size: 14px; font-weight: 700; color: var(--muted);
+  }
   .picker { position: relative; text-align: center; }
   .picker select { position: absolute; inset: 0; opacity: 0; width: 100%; font-size: 16px; cursor: pointer; }
-  #dateLabel { display: block; font-weight: 700; font-size: 18px; }
-  #dateSub { display: block; font-size: 13px; color: var(--muted); }
+  #dateLabel, #dateSub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #dateLabel { font-weight: 700; font-size: 18px; }
+  #dateSub { font-size: 13px; color: var(--muted); }
   .tonight { color: var(--accent); }
 
   main { max-width: 640px; margin: 0 auto; padding: 8px 16px 24px; }
@@ -55,7 +65,7 @@
   }
   .set h2 span { text-transform: none; letter-spacing: 0; font-weight: 400; }
   ol { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-  li + li { border-top: 1px solid var(--line); }
+  ol > li + li { border-top: 1px solid var(--line); }
 
   .song { display: grid; grid-template-columns: 28px 1fr auto; gap: 2px 10px; padding: 12px 14px; }
   .no { color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
@@ -82,8 +92,25 @@
 
   .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
   .empty button { margin-top: 12px; padding: 10px 18px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
-  footer { max-width: 640px; margin: 0 auto; padding: 0 20px 24px; color: var(--muted); font-size: 13px; text-align: center; }
+  footer { max-width: 640px; margin: 0 auto; padding: 0 20px 80px; color: var(--muted); font-size: 13px; text-align: center; } /* room for the floating switch */
   footer a { color: inherit; }
+  footer p { margin: 0 0 6px; }
+
+  /* "?" guide */
+  dialog {
+    width: min(560px, calc(100% - 24px)); max-height: calc(100% - 48px); padding: 0;
+    border: 1px solid var(--line); border-radius: 18px; background: var(--card); color: var(--ink); overflow: hidden;
+  }
+  dialog[open] { display: flex; flex-direction: column; } /* fixed title bar, scrolling text */
+  dialog::backdrop { background: rgb(0 0 0 / .45); }
+  .guide-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 12px 12px 20px; border-bottom: 1px solid var(--line); }
+  .guide-head h2 { margin: 0; font-size: 20px; }
+  .guide { padding: 14px 20px 24px; overflow-y: auto; }
+  .guide h3 { margin: 20px 0 6px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .guide p { margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
+  .guide a { color: var(--accent); }
+  .guide .sample { padding: 0 4px; background: var(--missing-bg); box-shadow: inset 3px 0 0 var(--missing-ink); color: inherit; }
+  .close { flex: none; width: 36px; height: 36px; border: 0; border-radius: 50%; background: var(--line); cursor: pointer; }
 
   /* Compact view, for reading on stage: one set per screen, two short lines per song, no links. */
   html.compact { scroll-snap-type: y mandatory; }
@@ -107,6 +134,7 @@
 </head>
 <body>
 <header class="bar">
+  <span></span>
   <button id="prev" aria-label="Previous date" disabled>‹</button>
   <label class="picker">
     <span id="dateLabel">Setlist</span>
@@ -114,13 +142,41 @@
     <select id="dates" aria-label="Choose a date"></select>
   </label>
   <button id="next" aria-label="Next date" disabled>›</button>
-  <button id="view" class="view" aria-label="Compact view" aria-pressed="false">
-    <svg class="to-compact" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
-    <svg class="to-full" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/></svg>
-  </button>
+  <button id="help" aria-label="How to use this page"><span>?</span></button>
 </header>
+
+<div class="views" id="views" role="group" aria-label="View">
+  <button id="viewFull" aria-pressed="true">Full</button>
+  <button id="viewCompact" aria-pressed="false">Compact</button>
+</div>
+
+<dialog id="guide" aria-labelledby="guideTitle">
+  <form method="dialog" class="guide-head">
+    <h2 id="guideTitle">How to use this page</h2>
+    <button class="close" aria-label="Close">✕</button>
+  </form>
+  <div class="guide">
+    <p>Simply Live's setlists, with a reference link for every song. Opens on tonight's gig; use ‹ › or tap the date to change it.</p>
+
+    <h3>Full view, for practising</h3>
+    <p>Each song shows its key, version and singer, with buttons for its references: Spotify, YouTube, Audio or Score.</p>
+    <p><b>ref: Ori −2</b> means the key we play is 2 semitones lower than the original recording.</p>
+    <p>Songs <mark class="sample">highlighted like this</mark> don't have a link in the sheet yet.</p>
+
+    <h3>Compact view, for performing</h3>
+    <p>Each set fits on one screen. Scroll down and it snaps to the next set. Links are hidden and your screen stays on. Your phone remembers which view you used last.</p>
+    <p>Tip: add this page to your Home Screen (Share → Add to Home Screen). It then opens full-screen, which leaves room for bigger text.</p>
+
+    <h3>Missing or broken links</h3>
+    <p>Everything comes live from the <a id="docLink" target="_blank" rel="noopener">setlist doc</a> and Simply Live's Repertoire Master Sheet. Links can't be changed on this page.</p>
+    <p>All missing or broken links have to be added or fixed in that Google Sheet, in the LINKS column of the "SIMPLY LIVE Repertoire" tab. The change shows up here the next time the page is opened or refreshed.</p>
+  </div>
+</dialog>
 <main id="app"><div class="empty">Loading the setlist…<br>The first visit takes a few seconds.</div></main>
-<footer id="status"></footer>
+<footer>
+  <p id="status"></p>
+  <p>© 2026 Davy Tan</p>
+</footer>
 
 <script src="t2s.js"></script>
 <script>
@@ -490,7 +546,8 @@ if (typeof document !== 'undefined') {
     const sets = [...main.querySelectorAll('.set')];
     if (!compact || !sets.length) return;
     main.style.setProperty('--fit', BASE + 'px');
-    const room = probe.offsetHeight - bar.offsetHeight;
+    const switchSpace = innerHeight - $('views').getBoundingClientRect().top + 6; // keep the set clear of the floating switch
+    const room = probe.offsetHeight - bar.offsetHeight - switchSpace;
     const tallest = Math.max(...sets.map(s => s.lastElementChild.getBoundingClientRect().bottom - s.getBoundingClientRect().top + BASE / 2));
     const scale = Math.min(1.5, Math.max(0.7, (room * 0.98) / tallest));
     main.style.setProperty('--fit', (BASE * scale).toFixed(1) + 'px');
@@ -501,7 +558,8 @@ if (typeof document !== 'undefined') {
     const anchor = [...document.querySelectorAll('.set')].find(s => s.getBoundingClientRect().bottom > barH + 1); // set now at the top
     compact = on;
     document.documentElement.classList.toggle('compact', on);
-    $('view').setAttribute('aria-pressed', String(on));
+    $('viewFull').setAttribute('aria-pressed', String(!on));
+    $('viewCompact').setAttribute('aria-pressed', String(on));
     try { localStorage.setItem(VIEW, on ? 'compact' : 'full'); } catch {}
     fit();
     anchor?.scrollIntoView();
@@ -582,7 +640,11 @@ if (typeof document !== 'undefined') {
     const i = dates.findIndex(d => '#' + iso(d.date) === location.hash);
     if (i >= 0 && i !== current) show(i);
   });
-  $('view').onclick = () => setView(!compact);
+  $('viewFull').onclick = () => setView(false);
+  $('viewCompact').onclick = () => setView(true);
+  $('help').onclick = () => $('guide').showModal();
+  $('guide').addEventListener('click', e => { if (e.target === $('guide')) $('guide').close(); }); // tap outside to close
+  $('docLink').href = `${SOURCES.doc}/edit`;
   addEventListener('resize', () => { if (`${innerWidth}x${probe.offsetHeight}` !== fitted) fit(); }); // rotation, not toolbars
   document.addEventListener('visibilitychange', () => compact && keepAwake(true));
   addEventListener('pointerdown', () => compact && keepAwake(true));
