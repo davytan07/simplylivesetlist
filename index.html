@@ -387,7 +387,16 @@ function buildLibrary(rows) {
 
 const han = s => Array.from(s.match(/\p{Script=Han}/gu) || [], c => T2S.get(c) || c); // compared in Simplified
 const latin = s => Array.from(s.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]/g, ''));
-const normKey = k => k.replace(/♭/g, 'b').replace(/♯/g, '#').replace(/\s+/g, '').toLowerCase().split(/[-–>]/)[0];
+// The first key named: "E  (Eb)", "A to B", "Bbm > Bb" and "A (female key)" all start a key.
+const normKey = k => {
+  const s = k.replace(/♭/g, 'b').replace(/♯/g, '#').toLowerCase().trim();
+  return (s.match(/^[a-g][#b]?m?(?![a-z])/) || [s.replace(/\s+/g, '').split(/[-–>]/)[0]])[0];
+};
+// "Ori", "Original" and "OG" are the same version; "ver"/"version" is noise ("Rockver" = "Rock").
+const verForm = s => {
+  const t = s.replace(/ver(sion|s)?\b\.?/ig, '').replace(/\b(original|og)\b/ig, 'ori');
+  return latin(t).join('') + han(t).join('');
+};
 
 // LCS / longer length: order-aware, tolerant of small spelling differences, but an
 // extra word still counts against it (我難過 is not 我不难过, Love Me is not Love More).
@@ -411,15 +420,19 @@ function similarity(a, b) {
 function titleForms(title) {
   const short = title.replace(/\s+[-–/]\s+.*$/, '').replace(/\([^)]*\)|\[[^\]]*\]|["“][^"”]*["”]/g, '').replace(/^the\s+/i, '').trim();
   const spelled = t => t.replace(/(\p{Script=Han}+|[a-z]+)\s?[x×]([2-9])\b/giu, (_, w, n) => w.repeat(+n));
-  return [...new Set([title, short].flatMap(t => [t, spelled(t)]))].filter(Boolean).map(t => ({ han: han(t), latin: latin(t) }));
+  return [...new Set([title, short].flatMap(t => [t, spelled(t)]))].filter(Boolean)
+    .map(t => ({ han: han(t), latin: latin(t), nums: (t.match(/\d+/g) || []).join(' ') }));
 }
 
 // Chinese characters are the strongest signal; pinyin alone can't tell 愛 from 曖.
+// Numbers must agree: "Jay Chou Medley 4" is neither "Medley 1" nor plain "Medley", however alike
+// they look. Digits may only be left out when the Chinese is the same ("Shi Yi 十一" is "11 十一").
 function formScore(q, r) {
   const lat = similarity(q.latin, r.latin);
-  if (!q.han.length || !r.han.length) return lat;
-  const h = similarity(q.han, r.han);
-  return Math.max(h, (h + lat) / 2);
+  const h = q.han.length && r.han.length ? similarity(q.han, r.han) : -1;
+  const score = h < 0 ? lat : Math.max(h, (h + lat) / 2);
+  const numsDiffer = q.nums !== r.nums && ((q.nums && r.nums) || h < 1);
+  return numsDiffer ? 0.7 * score : score;
 }
 
 const titleScore = (qs, rs) => Math.max(...qs.flatMap(q => rs.map(r => formScore(q, r))));
@@ -427,7 +440,7 @@ const titleScore = (qs, rs) => Math.max(...qs.flatMap(q => rs.map(r => formScore
 function indexLibrary(library) {
   for (const row of library) {
     row.forms = titleForms(row.title);
-    row.ver = latin(`${row.version} ${row.remark}`.replace(/\bver(sion|s)?\b\.?/ig, ''));
+    row.ver = verForm(`${row.version} ${row.remark}`);
   }
   return library;
 }
@@ -438,11 +451,16 @@ function findRow(title, entry, library) {
   const best = scored[0];
   if (!best || best.score < MATCH_THRESHOLD) return null;
   // The same song can be listed in several versions/keys: prefer the one the setlist asks for.
-  const ver = latin(entry.version.replace(/\bver(sion|s)?\b\.?/ig, ''));
+  // The key is the surest sign ("Yong Qi (Ori/F)" is the Fish Leong row in F, not Mian Zi's "Ori" in E),
+  // then the version named, then the romanisation ("Hei Foon Nei" is Cantonese, "Xi Huan Ni" Mandarin).
+  const ver = verForm(entry.version);
   const key = normKey(entry.key);
+  const verScore = row => !ver ? 0 : row.ver.includes(ver) ? 1 : similarity(Array.from(ver), Array.from(row.ver));
+  const romanScore = row => Math.max(...q.flatMap(a => row.forms.map(b => similarity(a.latin, b.latin))));
   const fit = ({ row, score }) => score
-    + 0.5 * similarity(ver, row.ver)
-    + (key && normKey(row.key) === key ? 0.3 : 0)
+    + (key && normKey(row.key) === key ? 0.6 : 0)
+    + 0.5 * verScore(row)
+    + 0.5 * romanScore(row)
     + (row.links.length ? 0.2 : 0);
   return scored.filter(s => s.score >= best.score - 0.05).sort((a, b) => fit(b) - fit(a))[0].row;
 }
