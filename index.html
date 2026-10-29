@@ -58,6 +58,11 @@
   }
   .views button { height: 36px; padding: 0 18px; border: 0; border-radius: 999px; background: none; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; }
   .views button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  /* Netlify's free plan pins a badge to the bottom-right corner. On narrow screens it would cover the switch, so lift the switch above it. */
+  @media (max-width: 600px) {
+    .nl-badge .views { bottom: calc(72px + env(safe-area-inset-bottom)); }
+    .nl-badge footer { padding-bottom: 140px; }
+  }
   #help span {
     display: inline-grid; place-items: center; width: 24px; height: 24px;
     border: 1.5px solid currentColor; border-radius: 50%; font-size: 14px; font-weight: 700; color: var(--muted);
@@ -194,6 +199,8 @@
 
 <script src="t2s.js"></script>
 <script>
+if (typeof location !== 'undefined' && location.hostname.endsWith('.netlify.app')) document.documentElement.classList.add('nl-badge');
+
 // The two Google files this page reads. Both must be shared as "Anyone with the link can view".
 const SOURCES = {
   doc: 'https://docs.google.com/document/d/11fZCWRjIeQ12KSugUx5lXLvCpGZmROM28RYsjdLhg6E',
